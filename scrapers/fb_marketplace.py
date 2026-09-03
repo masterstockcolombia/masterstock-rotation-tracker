@@ -30,6 +30,8 @@ from urllib.parse import urlencode
 import sqlite_utils
 from playwright.sync_api import sync_playwright
 
+from scrapers.schema import channel_type_for
+
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data" / "masterstock_resale.sqlite"
 
@@ -167,6 +169,7 @@ def run() -> int:
                     "category": category,
                     "period": today,
                     "source": "fb_marketplace",
+                    "channel_type": channel_type_for("fb_marketplace"),
                     "fetched_at": fetched_at,
                     "naics_label": query,
                     "naics_code": None,

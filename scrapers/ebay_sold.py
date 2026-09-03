@@ -29,6 +29,8 @@ from urllib.parse import urlencode
 import sqlite_utils
 from playwright.sync_api import sync_playwright
 
+from scrapers.schema import channel_type_for
+
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data" / "masterstock_resale.sqlite"
 
@@ -107,6 +109,7 @@ def run() -> int:
                         "category": category,
                         "period": today,
                         "source": "ebay_sold",
+                        "channel_type": channel_type_for("ebay_sold"),
                         "fetched_at": fetched_at,
                         "naics_label": query,
                         "naics_code": None,
@@ -126,6 +129,7 @@ def run() -> int:
                         "category": category,
                         "period": today,
                         "source": "ebay_sold",
+                        "channel_type": channel_type_for("ebay_sold"),
                         "fetched_at": fetched_at,
                         "naics_label": query,
                         "naics_code": None,

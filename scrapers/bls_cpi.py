@@ -23,6 +23,8 @@ from pathlib import Path
 
 import httpx
 import sqlite_utils
+
+from scrapers.schema import channel_type_for
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -89,6 +91,7 @@ def run() -> int:
                     "category": category,
                     "period": period,
                     "source": "bls_cpi",
+                    "channel_type": channel_type_for("bls_cpi"),
                     "fetched_at": fetched_at,
                     "naics_label": series_id,
                     "naics_code": series_id,
