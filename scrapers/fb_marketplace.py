@@ -62,12 +62,14 @@ QUERIES = {
         "new balance shoes new",
         "levis jeans",
     ],
+    # Corregido 2026-09-03: LEGO/Hot Wheels/Barbie/Squishmallow/Nerf son
+    # juguetes de coleccion, no deportes -- movidos a "toys" (mismo fix
+    # que craigslist.py, con evidencia real de que la seccion deportiva
+    # de Craigslist devolvia 0 para estos terminos).
     "sporting_hobby": [
-        "lego set",
-        "hot wheels case",
-        "barbie doll",
-        "squishmallow",
-        "nerf gun",
+        "golf clubs",
+        "weight bench",
+        "bicycle new",
         "big 5 sporting goods",
     ],
     "electronics_appliance": [
@@ -86,6 +88,11 @@ QUERIES = {
     "toys": [
         "hasbro board game",
         "mattel toy",
+        "lego set",
+        "hot wheels case",
+        "barbie doll",
+        "squishmallow",
+        "nerf gun",
     ],
     # Ampliado 2026-09-03 -- categorias adicionales de
     # 20_Censo_Vendedores_B-Stock_Filtrado del vault (hogar/decoracion,

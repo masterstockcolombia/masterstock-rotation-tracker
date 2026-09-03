@@ -34,6 +34,19 @@ que un termino de marca esta acotado a la categoria que uno espera --
 verificar contra la seccion/categoria real de la plataforma, no confiar en
 que el query string por si solo filtra bien.
 
+## Bug de clasificacion: LEGO/Hot Wheels/Barbie estaban mal categorizados como "deportes" (encontrado y corregido 2026-09-03)
+
+Al ampliar categorias, LEGO/Hot Wheels/Barbie/Squishmallow/Nerf se pusieron
+bajo `sporting_hobby` en vez de `toys` -- error conceptual, no tecnico. Se
+detecto probando la seccion real de Craigslist "sporting goods" (`spo`,
+encontrada en esta misma ronda) con esos terminos: **0 resultados** en las
+4 marcas, contra 32-60 resultados con terminos deportivos reales (golf
+clubs, weight bench, bicycle). Confirma que la seccion funciona bien --
+el problema era la categoria asignada a las marcas, no el codigo de
+seccion. Movidas a `toys` en las 3 fuentes (Craigslist, FB Marketplace,
+Google Trends); `sporting_hobby` ahora usa marcas/equipos deportivos
+reales + la seccion dedicada `spo` en vez de `sga` (general).
+
 ## Multiples queries por categoria (ampliado 2026-09-03)
 
 Cada categoria puede tener varias marcas/terminos de busqueda (ej.

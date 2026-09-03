@@ -78,7 +78,7 @@ MAX_CONCURRENT_CITIES = 8  # subido de 4 a 8 (2026-09-03) para sostener 48 ciuda
 # vault, categorias que sobreviven el filtro de sourcing real).
 CRAIGSLIST_SECTIONS = {
     "apparel_footwear": "cla",  # clothing & accessories
-    "sporting_hobby": "sga",  # general for sale (sporting goods no tiene seccion propia)
+    "sporting_hobby": "spo",  # sporting goods -- corregido 2026-09-03, antes "sga" (general) devolvia muy pocos resultados; "spo" es la seccion real dedicada, no encontrada en la ronda anterior
     "electronics_appliance": "ela",  # electronics
     "furniture_home": "fua",  # furniture
     "toys": "tag",  # toys & games
@@ -97,12 +97,16 @@ QUERIES = {
         "nike shoes",
         "adidas shoes new",
     ],
+    # Corregido 2026-09-03: LEGO/Hot Wheels/Barbie/Squishmallow/Nerf son
+    # juguetes de coleccion, no equipamiento deportivo -- movidos a "toys".
+    # Confirmado con evidencia real: 0 resultados en la seccion "spo"
+    # (sporting goods) para esos terminos, pero 32-60 resultados con
+    # terminos deportivos reales (golf clubs, weight bench, bicycle).
     "sporting_hobby": [
-        "lego set",
-        "hot wheels case",
-        "barbie doll",
-        "squishmallow",
-        "nerf gun",
+        "golf clubs",
+        "weight bench",
+        "bicycle new",
+        "big 5 sporting goods",
     ],
     "electronics_appliance": [
         "jbl speaker",
@@ -118,6 +122,11 @@ QUERIES = {
     "toys": [
         "hasbro board game",
         "mattel toy",
+        "lego set",
+        "hot wheels case",
+        "barbie doll",
+        "squishmallow",
+        "nerf gun",
     ],
     # Ampliado 2026-09-03 -- categorias adicionales de 20_Censo_Vendedores_B-Stock_Filtrado
     "home_decor": [

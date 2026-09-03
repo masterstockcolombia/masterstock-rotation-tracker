@@ -42,8 +42,10 @@ QUERIES = {
         "champion hoodie", "hanes t shirt", "wrangler jeans",
         "adidas hoodie", "nike shoes", "skechers shoes", "new balance shoes",
     ],
+    # Corregido 2026-09-03: LEGO/Hot Wheels/Barbie/Squishmallow/Nerf son
+    # juguetes de coleccion, movidos a "toys" (mismo fix que craigslist.py).
     "sporting_hobby": [
-        "lego set", "hot wheels", "barbie doll", "squishmallow", "nerf gun",
+        "golf clubs", "weight bench", "bicycle",
     ],
     "electronics_appliance": [
         "jbl speaker", "bose speaker", "beats headphones",
@@ -54,6 +56,7 @@ QUERIES = {
     ],
     "toys": [
         "hasbro board game", "mattel toy",
+        "lego set", "hot wheels", "barbie doll", "squishmallow", "nerf gun",
     ],
     "home_decor": [
         "home decor", "world market",
