@@ -19,10 +19,25 @@ base de datos versionada** -- gratis, propia, con timestamp de cada snapshot.
 | Fuente | Costo en dinero | Costo en tiempo humano | Riesgo de romperse |
 |---|---|---|---|
 | Census MARTS + BLS CPI | $0 para siempre | Cero despues de configurar | Ninguno (API gubernamental) |
-| eBay / Facebook Marketplace | $0 | ~15-30 min/semana resolviendo CAPTCHA | Alto -- GitHub Actions corre desde IPs de Azure que Cloudflare trata con sospecha estructural. No prometer automatizacion 100% |
+| eBay / Facebook Marketplace | $0 | ~15-30 min/semana resolviendo CAPTCHA | Alto -- confirmado EMPIRICO, no solo teorico (ver abajo) |
 
 No confundir las dos ramas. La primera es "configurar una vez y olvidar". La
 segunda es gratis en dinero, no en atencion.
+
+### eBay: resultado real del primer test (2026-09-03)
+
+Con Playwright + Chromium real (no solo requests HTTP, que fallan 4/4 con
+403 inmediato), corriendo desde una maquina normal (no GitHub Actions):
+**3 de 4 categorias bloqueadas con CAPTCHA real**, la 4ta sin bloqueo
+explicito pero sin poder extraer datos (probable cambio de layout/selector
+de eBay). Confirma el hallazgo del research: el bloqueo es real y no es
+solo teoria de "IP de datacenter" -- pasa incluso desde IP residencial.
+El scraper (`scrapers/ebay_sold.py`) queda commiteado y corriendo en cron
+diario igual, porque el bloqueo NO es 100% consistente (una corrida a otra
+cambia que categoria pasa) -- cuando pasa, el dato es real y se guarda con
+`confidence=med`; cuando no, se guarda `confidence=blocked` en vez de fallar
+silenciosamente, asi el historial de bloqueos es data en si misma (permite
+ver si mejora/empeora con el tiempo).
 
 ## Setup
 
@@ -53,8 +68,9 @@ Ya configurados en este repo (Settings > Secrets and variables > Actions):
 
 | Workflow | Cuando | Que hace |
 |---|---|---|
-| `census-marts.yml` | Lunes 09:00 UTC | Scrapea Census, upsert al sqlite, commit+push si cambio |
-| `bls-cpi.yml` | Lunes 09:30 UTC | Scrapea BLS, upsert al sqlite, commit+push si cambio |
+| `census-marts.yml` | Lunes 09:00 UTC | Scrapea Census (11 categorias), upsert al sqlite, commit+push si cambio |
+| `bls-cpi.yml` | Lunes 09:30 UTC | Scrapea BLS (10 series), upsert al sqlite, commit+push si cambio |
+| `ebay-sold.yml` | Diario 14:00 UTC | Intenta sell-through de eBay (4 categorias); guarda `confidence=blocked` cuando falla en vez de nada |
 | `publish-pages.yml` | Al detectar cambio en `data/masterstock_resale.sqlite` | Copia el sqlite a `docs/` para servirlo via GitHub Pages |
 
 Los dos scrapers corren desfasados 30 min para minimizar choque de push sobre
