@@ -1,0 +1,31 @@
+name: publish-pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/masterstock_resale.sqlite"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy sqlite into docs/ for GitHub Pages
+        run: cp data/masterstock_resale.sqlite docs/masterstock_resale.sqlite
+
+      - name: Commit docs copy if changed
+        run: |
+          git config user.name "masterstock-rotation-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/masterstock_resale.sqlite
+          git diff --staged --quiet || git commit -m "docs: sync sqlite for Datasette Lite $(date -u +%Y-%m-%d)"
+          git pull --rebase origin main
+          git push

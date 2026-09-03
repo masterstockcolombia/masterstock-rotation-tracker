@@ -1,11 +1,10 @@
-name: census-marts
+name: bls-cpi
 
 on:
   schedule:
-    # Cada lunes 09:00 UTC. Census MARTS se actualiza mensualmente, semanal
-    # alcanza de sobra y mantiene el workflow "vivo" (evita auto-disable a
-    # los 60 dias de inactividad).
-    - cron: "0 9 * * 1"
+    # Cada lunes 09:30 UTC (30 min despues de census-marts, para minimizar
+    # choque de push sobre el mismo archivo sqlite).
+    - cron: "30 9 * * 1"
   workflow_dispatch: {}
 
 permissions:
@@ -24,16 +23,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Census MARTS scraper
+      - name: Run BLS CPI scraper
         env:
-          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
-        run: python -m scrapers.census_marts
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+        run: python -m scrapers.bls_cpi
 
       - name: Commit data if changed
         run: |
           git config user.name "masterstock-rotation-bot"
           git config user.email "actions@users.noreply.github.com"
           git add data/masterstock_resale.sqlite
-          git diff --staged --quiet || git commit -m "data: census marts snapshot $(date -u +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "data: bls cpi snapshot $(date -u +%Y-%m-%d)"
           git pull --rebase origin main
           git push

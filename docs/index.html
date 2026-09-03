@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MasterStock Rotation Tracker</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, sans-serif; margin: 0; padding: 0; }
+    header { background: #0f172a; color: #fff; padding: 1rem 1.5rem; }
+    header h1 { font-size: 1.1rem; margin: 0; }
+    header p { margin: 0.25rem 0 0; font-size: 0.85rem; color: #94a3b8; }
+    iframe { width: 100%; height: calc(100vh - 70px); border: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MasterStock Rotation Tracker</h1>
+    <p>Base de datos propia de rotacion/estacionalidad por categoria (Census MARTS + BLS CPI). Patron git-scraping, $0 recurrente.</p>
+  </header>
+  <iframe
+    src="https://lite.datasette.io/?url=https://masterstockcolombia.github.io/masterstock-rotation-tracker/masterstock_resale.sqlite#/masterstock_resale/comps_rotation"
+  ></iframe>
+</body>
+</html>
