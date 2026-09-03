@@ -33,6 +33,29 @@ Definido en `scrapers/schema.py` -- toda fuente nueva debe registrarse ahi
 antes de escribir a la tabla (falla ruidoso con `KeyError` si no, a
 proposito, para no dejar filas mal clasificadas).
 
+## Categorias: bug real encontrado -- nombres no coinciden entre fuentes
+
+`category` NO es directamente comparable entre fuentes sin pasar por
+`canonical_category()` (`scrapers/schema.py`). Ejemplo real detectado
+2026-09-03: `bls_cpi` guarda `electronics` y `appliances` como dos series
+CPI separadas (son indices de precio distintos, fusionarlos en el scraper
+perderia precision real), mientras Census/eBay/Facebook/Craigslist/Google
+Trends usan la categoria fusionada `electronics_appliance`. Un `JOIN`/query
+directo comparando `category` entre `bls_cpi` y cualquier otra fuente para
+electronica **devuelve 0 filas sin ningun error** -- el tipo de bug mas
+peligroso porque no avisa que existe.
+
+`canonical_category(category)` traduce las categorias de fuente a su
+categoria canonica para cruce. Usar SIEMPRE esta funcion al comparar
+`category` entre fuentes distintas, nunca comparar el string crudo.
+
+```python
+from scrapers.schema import canonical_category
+# mal: row_bls['category'] == row_fb['category']  -- silenciosamente False
+# bien:
+canonical_category(row_bls['category']) == canonical_category(row_fb['category'])
+```
+
 ## Honestidad sobre que fuentes son "gratis y listo" vs "gratis + mantenimiento"
 
 | Fuente | channel_type | Costo en dinero | Costo en tiempo humano | Riesgo de romperse |

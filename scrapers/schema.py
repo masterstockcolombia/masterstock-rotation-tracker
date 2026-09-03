@@ -43,3 +43,34 @@ def channel_type_for(source: str) -> str:
     arriba -- mejor un KeyError en desarrollo que una fila mal clasificada
     en produccion."""
     return SOURCE_TO_CHANNEL[source]
+
+
+# ---------------------------------------------------------------------------
+# Mapeo de categoria canonica -- resuelve el hueco real encontrado
+# 2026-09-03: bls_cpi usa "electronics" y "appliances" como series CPI
+# separadas (son indices de precio distintos, fusionarlos perderia
+# precision real), mientras el resto de las fuentes usa la categoria
+# fusionada "electronics_appliance". Sin este mapeo, un JOIN directo por
+# `category` entre bls_cpi y cualquier otra fuente para esa categoria
+# falla EN SILENCIO (0 filas, sin error) -- el bug mas peligroso porque
+# no avisa que existe.
+#
+# Regla: NO renombrar las categorias en las tablas fuente (perderia
+# informacion real de BLS). En su lugar, este mapeo declara que
+# categorias "de fuente" pertenecen a que "categoria canonica" para
+# analisis cruzado. Usar CANONICAL_CATEGORY.get(category, category) al
+# leer, nunca comparar `category` crudo entre fuentes sin pasar por esto.
+CANONICAL_CATEGORY = {
+    "electronics": "electronics_appliance",  # bls_cpi
+    "appliances": "electronics_appliance",  # bls_cpi
+    "footwear": "apparel_footwear",  # bls_cpi (footwear separado de apparel)
+}
+
+
+def canonical_category(category: str) -> str:
+    """Traduce una categoria especifica de fuente a su categoria canonica
+    para cruce entre fuentes. Categorias ya canonicas (o sin mapeo
+    conocido, ej. las macro sin equivalente en marketplace: food_at_home,
+    housekeeping_supplies, motor_vehicles, shelter) devuelven el mismo
+    valor sin cambios."""
+    return CANONICAL_CATEGORY.get(category, category)
