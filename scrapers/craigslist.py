@@ -49,27 +49,23 @@ DB_PATH = ROOT / "data" / "masterstock_resale.sqlite"
 # patron distinto), pero cubre costa este/oeste, sur, medio oeste y
 # mountain west con densidad real de poblacion/comercio.
 CITY_SUBDOMAINS = [
-    "newyork",       # NY -- corredor de sourcing real FOB NY/NJ
-    "newjersey",      # NJ -- mismo corredor
-    "boston",         # MA -- Northeast
-    "philadelphia",   # PA -- Northeast
-    "chicago",        # IL -- Midwest
-    "detroit",        # MI -- Midwest
-    "minneapolis",    # MN -- Midwest
-    "houston",        # TX -- South
-    "dallas",         # TX -- South
-    "sanantonio",     # TX -- South
-    "atlanta",        # GA -- South
-    "miami",          # FL -- South
-    "losangeles",     # CA -- West
-    "sfbay",          # CA -- West (SF Bay Area)
-    "seattle",        # WA -- Pacific NW
-    "phoenix",        # AZ -- Southwest
-    "denver",         # CO -- Mountain
-    "washingtondc",   # DC -- Mid-Atlantic
+    # Ronda 1 (2026-09-03)
+    "newyork", "newjersey", "boston", "philadelphia",
+    "chicago", "detroit", "minneapolis",
+    "houston", "dallas", "sanantonio", "atlanta", "miami",
+    "losangeles", "sfbay", "seattle", "phoenix", "denver", "washingtondc",
+    # Ronda 2 (2026-09-03, ampliacion a mas volumen): 30 ciudades mas,
+    # cada codigo de subdominio verificado individualmente contra la API
+    # real de Craigslist antes de agregarlo (status 200 + title esperado).
+    "sandiego", "sacramento", "portland", "lasvegas", "saltlakecity",
+    "stlouis", "kansascity", "columbus", "indianapolis", "nashville",
+    "charlotte", "raleigh", "orlando", "tampa", "jacksonville",
+    "pittsburgh", "baltimore", "milwaukee", "cincinnati", "cleveland",
+    "austin", "elpaso", "oklahomacity", "albuquerque", "tucson",
+    "neworleans", "memphis", "louisville", "richmond", "providence",
 ]
 
-MAX_CONCURRENT_CITIES = 4  # navegadores simultaneos, balance entre velocidad y no saturar CPU/red local
+MAX_CONCURRENT_CITIES = 8  # subido de 4 a 8 (2026-09-03) para sostener 48 ciudades sin disparar el tiempo de corrida
 
 # Categoria interna -> seccion de Craigslist. BUG REAL encontrado y
 # corregido 2026-09-03: buscar en "sss" (all-for-sale) sin seccion
@@ -112,6 +108,8 @@ QUERIES = {
         "jbl speaker",
         "bose speaker",
         "beats headphones",
+        "ge appliance new",
+        "whirlpool appliance new",
     ],
     "furniture_home": [
         "sectional couch",

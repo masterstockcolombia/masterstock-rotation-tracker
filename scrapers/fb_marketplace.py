@@ -58,6 +58,9 @@ QUERIES = {
         "nike shorts",
         "nike shoes",
         "adidas shoes new",
+        "skechers shoes new",
+        "new balance shoes new",
+        "levis jeans",
     ],
     "sporting_hobby": [
         "lego set",
@@ -65,15 +68,20 @@ QUERIES = {
         "barbie doll",
         "squishmallow",
         "nerf gun",
+        "big 5 sporting goods",
     ],
     "electronics_appliance": [
         "jbl speaker",
         "bose speaker",
         "beats headphones",
+        "ge appliance new",
+        "whirlpool appliance new",
+        "electrolux appliance new",
     ],
     "furniture_home": [
         "sectional couch",
         "recliner chair",
+        "ashley furniture new",
     ],
     "toys": [
         "hasbro board game",
