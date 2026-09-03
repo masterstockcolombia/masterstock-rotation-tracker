@@ -36,25 +36,54 @@ cp .env.example .env
 # sin key, confirmado 2026-09-03) y BLS_API_KEY si se suma ese scraper.
 
 python -m scrapers.census_marts
+python -m scrapers.bls_cpi
 ```
 
-Esto crea/actualiza `data/masterstock_resale.sqlite` con las series de Census.
+Esto crea/actualiza `data/masterstock_resale.sqlite` con las series de Census
+(volumen de venta retail) y BLS (indice de precio/CPI) por categoria.
 
 ## Secrets de GitHub Actions
 
-Para que el workflow corra en la nube, agregar en Settings > Secrets and
-variables > Actions del repo:
-- `CENSUS_API_KEY`
+Ya configurados en este repo (Settings > Secrets and variables > Actions):
+- `CENSUS_API_KEY` -- seteado
+- `BLS_API_KEY` -- opcional, sin ella el scraper igual corre (25 queries/dia
+  alcanza para 1 corrida semanal de 4 series)
+
+## Cron activo
+
+| Workflow | Cuando | Que hace |
+|---|---|---|
+| `census-marts.yml` | Lunes 09:00 UTC | Scrapea Census, upsert al sqlite, commit+push si cambio |
+| `bls-cpi.yml` | Lunes 09:30 UTC | Scrapea BLS, upsert al sqlite, commit+push si cambio |
+| `publish-pages.yml` | Al detectar cambio en `data/masterstock_resale.sqlite` | Copia el sqlite a `docs/` para servirlo via GitHub Pages |
+
+Los dos scrapers corren desfasados 30 min para minimizar choque de push sobre
+el mismo archivo binario; cada uno hace `git pull --rebase` antes de pushear
+por si igual coinciden.
 
 ## Consultar la data
 
 ```bash
 sqlite3 data/masterstock_resale.sqlite
-> select category, period, value from comps_rotation order by period desc limit 20;
+> select category, source, period, value from comps_rotation order by period desc limit 20;
 ```
 
-O (cuando este montado) via Datasette Lite en GitHub Pages -- consulta desde
-el navegador, sin backend, gratis.
+O sin instalar nada: **https://masterstockcolombia.github.io/masterstock-rotation-tracker/**
+-- Datasette Lite corre SQLite compilado a WebAssembly en el navegador,
+consulta el `.sqlite` servido estatico desde GitHub Pages, cero backend,
+cero costo.
+
+## Nota tecnica: sqlite es binario, cuidado con conflictos de merge
+
+Si dos procesos (local + cron, o dos crons) modifican `data/masterstock_resale.sqlite`
+y divergen, git NO puede mergear el binario automaticamente -- va a marcar
+conflicto. La resolucion correcta nunca es "elegir un lado a ciegas": como
+todos los scrapers usan `upsert` con clave natural (`category`, `period`,
+`source`), es seguro re-correr todos los scrapers sobre la version mas
+reciente y regenerar el archivo, o verificar que una version sea superset
+estricto de la otra antes de forzar. Ya paso una vez en el setup inicial
+(2026-09-03) y se resolvio verificando que el local contenia 100% de las
+filas del remoto antes de hacer force-push.
 
 ## Reglas de captura
 
