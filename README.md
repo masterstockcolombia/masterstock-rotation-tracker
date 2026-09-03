@@ -14,6 +14,26 @@ este repo. Cada workflow de GitHub Actions corre en cron, agrega filas nuevas,
 y hace `git commit` solo si el archivo cambio. **El historial de git es la
 base de datos versionada** -- gratis, propia, con timestamp de cada snapshot.
 
+## Bug real de calidad de datos: Craigslist sin seccion contaminaba precios (encontrado y corregido 2026-09-03)
+
+Buscar en `sss` (all-for-sale, sin seccion) hace match de texto libre contra
+TODAS las categorias de Craigslist -- un query como "bose speaker" devolvia,
+junto con parlantes reales, una **Chevrolet Silverado a $43,230** porque su
+descripcion mencionaba "Bose sound system" de fabrica. Ese unico outlier
+inflaba la mediana de precio de toda la categoria electronics_appliance.
+
+Fix: `CRAIGSLIST_SECTIONS` mapea cada categoria interna a su seccion real de
+Craigslist (`ela` electronics, `cla` clothing, `fua` furniture, `tag` toys,
+`sga` general) -- verificado uno por uno contra el `<title>` real de cada
+pagina antes de usarlo (un primer intento con `sya` resultó ser "computers",
+no "clothing" como se asumia). Con la seccion correcta, el mismo query
+"bose speaker" en Atlanta paso de precios $40-49,230 a $15-1,225 (limpio).
+
+**Leccion para cualquier scraper de busqueda de texto libre**: nunca asumir
+que un termino de marca esta acotado a la categoria que uno espera --
+verificar contra la seccion/categoria real de la plataforma, no confiar en
+que el query string por si solo filtra bien.
+
 ## Multiples queries por categoria (ampliado 2026-09-03)
 
 Cada categoria puede tener varias marcas/terminos de busqueda (ej.

@@ -56,23 +56,44 @@ QUERIES = {
         "wrangler jeans",
         "adidas hoodie",
         "nike shorts",
+        "nike shoes",
+        "adidas shoes new",
     ],
     "sporting_hobby": [
         "lego set",
         "hot wheels case",
         "barbie doll",
         "squishmallow",
+        "nerf gun",
     ],
     "electronics_appliance": [
         "jbl speaker",
         "bose speaker",
+        "beats headphones",
     ],
     "furniture_home": [
         "sectional couch",
+        "recliner chair",
     ],
     "toys": [
         "hasbro board game",
         "mattel toy",
+    ],
+    # Ampliado 2026-09-03 -- categorias adicionales de
+    # 20_Censo_Vendedores_B-Stock_Filtrado del vault (hogar/decoracion,
+    # mascotas, bano/cocina -- categorias que sobreviven el filtro real
+    # de sourcing de MasterStock).
+    "home_decor": [
+        "world market decor",
+        "home decor set",
+    ],
+    "pet_supplies": [
+        "petco pet supplies",
+        "dog crate new",
+    ],
+    "bath_kitchen": [
+        "kohler faucet",
+        "kitchen fixture new",
     ],
 }
 

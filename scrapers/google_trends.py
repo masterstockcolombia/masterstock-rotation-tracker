@@ -38,6 +38,9 @@ QUERIES = {
     "electronics_appliance": "jbl speaker",
     "toys": "hot wheels",
     "furniture_home": "sectional couch",
+    "home_decor": "home decor",
+    "pet_supplies": "pet supplies",
+    "bath_kitchen": "kohler faucet",
 }
 
 TIMEFRAME = "today 3-m"  # 90 dias, suficiente para ver estacionalidad de corto plazo

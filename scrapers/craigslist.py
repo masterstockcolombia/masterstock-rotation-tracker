@@ -9,10 +9,18 @@ DESPUES del load inicial -- requiere esperar varios segundos con Playwright
 de precio y titulo vacios). No mide "sold" -- como Facebook Marketplace,
 mide listings activos + precio como proxy de oferta/densidad de mercado.
 
-Craigslist es por ciudad (subdominio), no nacional -- se corre sobre un
-set fijo de ciudades grandes cercanas al corredor de sourcing real de
-MasterStock (Northeast US) para que la senal sea geograficamente relevante,
-no un promedio nacional diluido.
+Craigslist es por ciudad (subdominio), no nacional. Ampliado 2026-09-03
+(pedido explicito: "necesitamos la data de todos los estados y de todas
+las categorias que manejamos") a 18 ciudades grandes, una por region/
+mercado metro clave de USA -- no las 50, pero suficiente para ver patron
+nacional real sin que el cron tarde horas.
+
+PARALELIZACION: con 18 ciudades x ~20 queries = 360 requests, el diseno
+secuencial original (1 a la vez, 3-6s delay) tardaria 30+ minutos. Este
+scraper corre CIUDADES en paralelo (un browser context por ciudad
+simultaneo, limitado por MAX_CONCURRENT_CITIES) mientras mantiene el
+delay entre queries DENTRO de cada ciudad (Craigslist es por-ciudad, no
+hay riesgo de que el rate limit de una ciudad afecte a otra).
 
 Uso:
     python -m scrapers.craigslist
@@ -22,6 +30,7 @@ from __future__ import annotations
 import random
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
@@ -34,15 +43,54 @@ from scrapers.schema import channel_type_for
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data" / "masterstock_resale.sqlite"
 
-# Ciudades grandes del corredor Northeast/cerca de la operacion real de
-# MasterStock (sourcing FOB NY/NJ) -- una sola ciudad por corrida para no
-# multiplicar 5 categorias x N ciudades en cada ejecucion diaria.
-CITY_SUBDOMAIN = "newyork"
+# 18 ciudades grandes, una por region/mercado metro clave de USA. No son
+# las 50 (eso multiplicaria el tiempo de corrida sin agregar mucha senal
+# nueva -- mercados chicos vecinos a uno grande ya cubierto no aportan
+# patron distinto), pero cubre costa este/oeste, sur, medio oeste y
+# mountain west con densidad real de poblacion/comercio.
+CITY_SUBDOMAINS = [
+    "newyork",       # NY -- corredor de sourcing real FOB NY/NJ
+    "newjersey",      # NJ -- mismo corredor
+    "boston",         # MA -- Northeast
+    "philadelphia",   # PA -- Northeast
+    "chicago",        # IL -- Midwest
+    "detroit",        # MI -- Midwest
+    "minneapolis",    # MN -- Midwest
+    "houston",        # TX -- South
+    "dallas",         # TX -- South
+    "sanantonio",     # TX -- South
+    "atlanta",        # GA -- South
+    "miami",          # FL -- South
+    "losangeles",     # CA -- West
+    "sfbay",          # CA -- West (SF Bay Area)
+    "seattle",        # WA -- Pacific NW
+    "phoenix",        # AZ -- Southwest
+    "denver",         # CO -- Mountain
+    "washingtondc",   # DC -- Mid-Atlantic
+]
 
-# Ampliado 2026-09-03 por marca real validada en 35_Formula_del_Pallet_Ganador
-# (antes 1 termino/categoria = 5 filas/corrida; ahora ~14). category se
-# repite -- multiples queries por categoria, cada una su propia fila via
-# naics_label en la PK (ver migracion de esquema en el commit).
+MAX_CONCURRENT_CITIES = 4  # navegadores simultaneos, balance entre velocidad y no saturar CPU/red local
+
+# Categoria interna -> seccion de Craigslist. BUG REAL encontrado y
+# corregido 2026-09-03: buscar en "sss" (all-for-sale) sin seccion
+# devuelve ruido de otras categorias que mencionan la marca en texto libre
+# (ej. "bose speaker" matcheaba una Chevrolet Silverado con "Bose sound
+# system" de fabrica, precio $43,230 contaminando el promedio/mediana de
+# electronica). Usar la seccion especifica de Craigslist filtra esto de
+# raiz. Categorias ampliadas 2026-09-03 con hogar/decoracion, mascotas y
+# bano/cocina (validadas contra 20_Censo_Vendedores_B-Stock_Filtrado del
+# vault, categorias que sobreviven el filtro de sourcing real).
+CRAIGSLIST_SECTIONS = {
+    "apparel_footwear": "cla",  # clothing & accessories
+    "sporting_hobby": "sga",  # general for sale (sporting goods no tiene seccion propia)
+    "electronics_appliance": "ela",  # electronics
+    "furniture_home": "fua",  # furniture
+    "toys": "tag",  # toys & games
+    "home_decor": "hsh",  # household items -- verificado
+    "pet_supplies": "sga",  # "pet" en CL es adopcion de animales vivos, no productos -- productos van a general
+    "bath_kitchen": "sga",  # general for sale, sin seccion propia en Craigslist
+}
+
 QUERIES = {
     "apparel_footwear": [
         "champion hoodie",
@@ -50,23 +98,40 @@ QUERIES = {
         "wrangler jeans",
         "adidas hoodie",
         "nike shorts",
+        "nike shoes",
+        "adidas shoes new",
     ],
     "sporting_hobby": [
         "lego set",
         "hot wheels case",
         "barbie doll",
         "squishmallow",
+        "nerf gun",
     ],
     "electronics_appliance": [
         "jbl speaker",
         "bose speaker",
+        "beats headphones",
     ],
     "furniture_home": [
         "sectional couch",
+        "recliner chair",
     ],
     "toys": [
         "hasbro board game",
         "mattel toy",
+    ],
+    # Ampliado 2026-09-03 -- categorias adicionales de 20_Censo_Vendedores_B-Stock_Filtrado
+    "home_decor": [
+        "world market decor",
+        "trillion home",
+    ],
+    "pet_supplies": [
+        "petco pet supplies",
+    ],
+    "bath_kitchen": [
+        "kohler faucet",
+        "signature hardware",
     ],
 }
 
@@ -87,31 +152,32 @@ MIN_DELAY_SECONDS = 3
 MAX_DELAY_SECONDS = 6
 
 
-def run() -> int:
-    db = sqlite_utils.Database(DB_PATH)
-    table = db["comps_rotation"]
-
-    inserted = 0
-    fetched_at = datetime.now(timezone.utc).isoformat()
+def _scrape_city(city: str) -> list[dict]:
+    """Corre TODAS las categorias/queries para una ciudad, secuencial
+    dentro de la ciudad (respeta rate limit por ciudad) pero esta funcion
+    en si corre en paralelo con las demas ciudades via ThreadPoolExecutor."""
+    rows = []
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    fetched_at = datetime.now(timezone.utc).isoformat()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
 
         for category, queries in QUERIES.items():
+            section = CRAIGSLIST_SECTIONS[category]
             for query in queries:
                 context = browser.new_context(user_agent=random.choice(USER_AGENTS))
                 page = context.new_page()
 
                 qs = urlencode({"query": query, "sort": "date"})
-                url = f"https://{CITY_SUBDOMAIN}.craigslist.org/search/sss?{qs}"
+                url = f"https://{city}.craigslist.org/search/{section}?{qs}"
 
                 try:
                     page.goto(url, timeout=20000, wait_until="domcontentloaded")
                     page.wait_for_timeout(4000)  # el listado se puebla via JS despues del load
                     html = page.content()
                 except Exception as exc:  # noqa: BLE001
-                    print(f"[craigslist] ERROR {category} ({query}): {exc}")
+                    print(f"[craigslist] ERROR {city}/{category} ({query}): {exc}")
                     html = ""
                 finally:
                     context.close()
@@ -120,29 +186,49 @@ def run() -> int:
                 prices = [int(p.replace(",", "")) for p in PRICE_RE.findall(html)]
                 median_price = sorted(prices)[len(prices) // 2] if prices else None
 
-                table.upsert(
+                rows.append(
                     {
                         "category": category,
                         "period": today,
                         "source": "craigslist",
                         "channel_type": channel_type_for("craigslist"),
                         "fetched_at": fetched_at,
-                        "naics_label": f"{query} ({CITY_SUBDOMAIN})",
+                        "naics_label": f"{query} ({city})",
                         "naics_code": None,
                         "metric": "active_listing_count",
                         "value": len(titles),
-                        "geo": CITY_SUBDOMAIN,
+                        "geo": city,
                         "confidence": "med" if titles else "low",
-                        "notes": f"query='{query}', city={CITY_SUBDOMAIN}, median_price_usd={median_price}",
-                    },
-                    pk=("category", "period", "source", "naics_label"),
-                    alter=True,
+                        "notes": f"query='{query}', city={city}, median_price_usd={median_price}",
+                    }
                 )
-                inserted += 1
-                print(f"[craigslist] OK {category} ({query}): {len(titles)} listings, median=${median_price}")
+                print(f"[craigslist] OK {city}/{category} ({query}): {len(titles)} listings, median=${median_price}")
                 time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
 
         browser.close()
+
+    return rows
+
+
+def run() -> int:
+    db = sqlite_utils.Database(DB_PATH)
+    table = db["comps_rotation"]
+
+    inserted = 0
+
+    with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_CITIES) as executor:
+        futures = {executor.submit(_scrape_city, city): city for city in CITY_SUBDOMAINS}
+        for future in as_completed(futures):
+            city = futures[future]
+            try:
+                rows = future.result()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[craigslist] CITY FAILED {city}: {exc}")
+                continue
+
+            for row in rows:
+                table.upsert(row, pk=("category", "period", "source", "naics_label"), alter=True)
+                inserted += 1
 
     print(f"[craigslist] inserted {inserted} rows into {DB_PATH}")
     return inserted
