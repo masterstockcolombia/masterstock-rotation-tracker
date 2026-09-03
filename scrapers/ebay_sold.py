@@ -41,13 +41,30 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
 ]
 
-# Categorias GREEN/CONDICIONAL de 35_Formula_del_Pallet_Ganador -- termino
-# de busqueda representativo por categoria (no exhaustivo, muestra).
+# Ampliado 2026-09-03 por marca real validada en 35_Formula_del_Pallet_Ganador
+# (antes 1 termino/categoria = 4 filas/corrida; ahora ~12). eBay bloquea la
+# mayoria de intentos (ver README) asi que mas queries = mas chance de que
+# ALGUNAS pasen, no garantia de que todas funcionen.
 QUERIES = {
-    "apparel_footwear": "champion hoodie mens",
-    "sporting_hobby": "lego set new",
-    "electronics_appliance": "jbl bluetooth speaker",
-    "toys": "hot wheels case",
+    "apparel_footwear": [
+        "champion hoodie mens",
+        "hanes t shirt new",
+        "wrangler jeans new",
+    ],
+    "sporting_hobby": [
+        "lego set new",
+        "barbie doll new",
+        "squishmallow new",
+    ],
+    "electronics_appliance": [
+        "jbl bluetooth speaker",
+        "bose speaker new",
+    ],
+    "toys": [
+        "hot wheels case",
+        "hasbro board game new",
+        "mattel toy new",
+    ],
 }
 
 MIN_DELAY_SECONDS = 4
@@ -82,69 +99,70 @@ def run() -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
 
-        for category, query in QUERIES.items():
-            context = browser.new_context(user_agent=random.choice(USER_AGENTS))
-            page = context.new_page()
+        for category, queries in QUERIES.items():
+            for query in queries:
+                context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+                page = context.new_page()
 
-            qs = urlencode({"_nkw": query, "LH_Sold": "1", "LH_Complete": "1", "_ipg": "60"})
-            url = f"{SEARCH_URL}?{qs}"
+                qs = urlencode({"_nkw": query, "LH_Sold": "1", "LH_Complete": "1", "_ipg": "60"})
+                url = f"{SEARCH_URL}?{qs}"
 
-            try:
-                page.goto(url, timeout=20000, wait_until="domcontentloaded")
-                page.wait_for_timeout(1500)
-                html = page.content()
-                status_blocked = _looks_blocked(html)
-            except Exception as exc:  # noqa: BLE001 -- cualquier fallo de red/timeout cuenta como bloqueo
-                print(f"[ebay_sold] ERROR {category} ({query}): {exc}")
-                html = ""
-                status_blocked = True
-            finally:
-                context.close()
+                try:
+                    page.goto(url, timeout=20000, wait_until="domcontentloaded")
+                    page.wait_for_timeout(1500)
+                    html = page.content()
+                    status_blocked = _looks_blocked(html)
+                except Exception as exc:  # noqa: BLE001 -- cualquier fallo de red/timeout cuenta como bloqueo
+                    print(f"[ebay_sold] ERROR {category} ({query}): {exc}")
+                    html = ""
+                    status_blocked = True
+                finally:
+                    context.close()
 
-            if status_blocked or not html:
-                blocked += 1
-                print(f"[ebay_sold] BLOCKED {category} ({query})")
-                table.upsert(
-                    {
-                        "category": category,
-                        "period": today,
-                        "source": "ebay_sold",
-                        "channel_type": channel_type_for("ebay_sold"),
-                        "fetched_at": fetched_at,
-                        "naics_label": query,
-                        "naics_code": None,
-                        "metric": "sold_count_snapshot",
-                        "value": None,
-                        "geo": "US",
-                        "confidence": "blocked",
-                        "notes": "eBay blocked/captcha -- requiere fallback manual o corrida desde IP no-datacenter",
-                    },
-                    pk=("category", "period", "source"),
-                    alter=True,
-                )
-            else:
-                count = _count_sold_items(html)
-                table.upsert(
-                    {
-                        "category": category,
-                        "period": today,
-                        "source": "ebay_sold",
-                        "channel_type": channel_type_for("ebay_sold"),
-                        "fetched_at": fetched_at,
-                        "naics_label": query,
-                        "naics_code": None,
-                        "metric": "sold_count_snapshot",
-                        "value": count,
-                        "geo": "US",
-                        "confidence": "med" if count else "low",
-                        "notes": f"conteo de listings con marcador sold en primera pagina de resultados, query='{query}'",
-                    },
-                    pk=("category", "period", "source"),
-                    alter=True,
-                )
-                inserted += 1
+                if status_blocked or not html:
+                    blocked += 1
+                    print(f"[ebay_sold] BLOCKED {category} ({query})")
+                    table.upsert(
+                        {
+                            "category": category,
+                            "period": today,
+                            "source": "ebay_sold",
+                            "channel_type": channel_type_for("ebay_sold"),
+                            "fetched_at": fetched_at,
+                            "naics_label": query,
+                            "naics_code": None,
+                            "metric": "sold_count_snapshot",
+                            "value": None,
+                            "geo": "US",
+                            "confidence": "blocked",
+                            "notes": "eBay blocked/captcha -- requiere fallback manual o corrida desde IP no-datacenter",
+                        },
+                        pk=("category", "period", "source", "naics_label"),
+                        alter=True,
+                    )
+                else:
+                    count = _count_sold_items(html)
+                    table.upsert(
+                        {
+                            "category": category,
+                            "period": today,
+                            "source": "ebay_sold",
+                            "channel_type": channel_type_for("ebay_sold"),
+                            "fetched_at": fetched_at,
+                            "naics_label": query,
+                            "naics_code": None,
+                            "metric": "sold_count_snapshot",
+                            "value": count,
+                            "geo": "US",
+                            "confidence": "med" if count else "low",
+                            "notes": f"conteo de listings con marcador sold en primera pagina de resultados, query='{query}'",
+                        },
+                        pk=("category", "period", "source", "naics_label"),
+                        alter=True,
+                    )
+                    inserted += 1
 
-            time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+                time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
 
         browser.close()
 

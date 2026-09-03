@@ -85,7 +85,7 @@ def run() -> int:
                     "confidence": "med",
                     "notes": f"Google Trends interest_over_time, query='{query}', escala relativa 0-100 (no volumen absoluto)",
                 },
-                pk=("category", "period", "source"),
+                pk=("category", "period", "source", "naics_label"),
                 alter=True,
             )
             inserted += 1

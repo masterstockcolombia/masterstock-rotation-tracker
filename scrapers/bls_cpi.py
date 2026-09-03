@@ -101,7 +101,7 @@ def run() -> int:
                     "confidence": "high",
                     "notes": "BLS CPI, not seasonally adjusted, proxy de tendencia de precio por categoria",
                 },
-                pk=("category", "period", "source"),
+                pk=("category", "period", "source", "naics_label"),
                 alter=True,
             )
             inserted += 1

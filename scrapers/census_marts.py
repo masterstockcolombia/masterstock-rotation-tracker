@@ -120,7 +120,7 @@ def run() -> int:
                         "confidence": "high",
                         "notes": "seasonally-adjusted monthly retail sales, macro proxy",
                     },
-                    pk=("category", "period", "source"),
+                    pk=("category", "period", "source", "naics_label"),
                     alter=True,
                 )
                 inserted += 1

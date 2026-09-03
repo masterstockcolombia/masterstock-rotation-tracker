@@ -42,14 +42,38 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
 ]
 
-# Categorias GREEN/CONDICIONAL de 35_Formula_del_Pallet_Ganador -- termino
-# de busqueda representativo por categoria.
+# Terminos de busqueda ampliados 2026-09-03: antes 1 termino generico por
+# categoria (5 filas/corrida total). Ahora por marca/SKU real validado en
+# 35_Formula_del_Pallet_Ganador (categorias SOURCE del vault) -- multiples
+# queries por categoria para tener una muestra real, no un solo punto de
+# dato. category se repite (varias queries -> misma categoria); cada query
+# se guarda como fila propia via naics_label, agregable despues por
+# categoria o por marca especifica.
 QUERIES = {
-    "apparel_footwear": "champion hoodie",
-    "sporting_hobby": "lego set",
-    "electronics_appliance": "jbl speaker",
-    "furniture_home": "sectional couch",
-    "toys": "hot wheels",
+    "apparel_footwear": [
+        "champion hoodie",
+        "hanes t shirt",
+        "wrangler jeans",
+        "adidas hoodie",
+        "nike shorts",
+    ],
+    "sporting_hobby": [
+        "lego set",
+        "hot wheels case",
+        "barbie doll",
+        "squishmallow",
+    ],
+    "electronics_appliance": [
+        "jbl speaker",
+        "bose speaker",
+    ],
+    "furniture_home": [
+        "sectional couch",
+    ],
+    "toys": [
+        "hasbro board game",
+        "mattel toy",
+    ],
 }
 
 # El HTML de Facebook varia entre corridas (A/B de su frontend, confirmado
@@ -120,71 +144,77 @@ def run() -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
 
-        for category, query in QUERIES.items():
-            context = browser.new_context(user_agent=random.choice(USER_AGENTS))
-            page = context.new_page()
+        for category, queries in QUERIES.items():
+            for query in queries:
+                context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+                page = context.new_page()
 
-            qs = urlencode({"query": query, "sortBy": "creation_time_descend"})
-            url = f"{SEARCH_URL}?{qs}"
+                qs = urlencode({"query": query, "sortBy": "creation_time_descend"})
+                url = f"{SEARCH_URL}?{qs}"
 
-            try:
-                page.goto(url, timeout=20000, wait_until="domcontentloaded")
-                page.wait_for_timeout(2000)
-                html = page.content()
-            except Exception as exc:  # noqa: BLE001
-                print(f"[fb_marketplace] ERROR {category} ({query}): {exc}")
-                html = ""
-            finally:
-                context.close()
+                try:
+                    page.goto(url, timeout=20000, wait_until="domcontentloaded")
+                    page.wait_for_timeout(2000)
+                    html = page.content()
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[fb_marketplace] ERROR {category} ({query}): {exc}")
+                    html = ""
+                finally:
+                    context.close()
 
-            if not html or _looks_blocked(html):
-                blocked += 1
-                print(f"[fb_marketplace] BLOCKED {category} ({query})")
+                # pk incluye naics_label (el query/marca) -- sin esto, varias
+                # marcas de la misma categoria en el mismo dia se pisarian
+                # entre si via upsert (bug real corregido 2026-09-03, antes
+                # solo 1 query por categoria asi que no se notaba).
+                if not html or _looks_blocked(html):
+                    blocked += 1
+                    print(f"[fb_marketplace] BLOCKED {category} ({query})")
+                    table.upsert(
+                        {
+                            "category": category,
+                            "period": today,
+                            "source": "fb_marketplace",
+                            "naics_label": query,
+                            "channel_type": channel_type_for("fb_marketplace"),
+                            "fetched_at": fetched_at,
+                            "naics_code": None,
+                            "metric": "active_listing_count",
+                            "value": None,
+                            "geo": "US",
+                            "confidence": "blocked",
+                            "notes": "FB Marketplace blocked/login-wall/checkpoint",
+                        },
+                        pk=("category", "period", "source", "naics_label"),
+                        alter=True,
+                    )
+                    time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+                    continue
+
+                listings = _parse_listings(html)
+                prices = [x["price"] for x in listings if x["price"] is not None]
+                median_price = sorted(prices)[len(prices) // 2] if prices else None
+
                 table.upsert(
                     {
                         "category": category,
                         "period": today,
                         "source": "fb_marketplace",
-                        "fetched_at": fetched_at,
                         "naics_label": query,
+                        "channel_type": channel_type_for("fb_marketplace"),
+                        "fetched_at": fetched_at,
                         "naics_code": None,
                         "metric": "active_listing_count",
-                        "value": None,
+                        "value": len(listings),
                         "geo": "US",
-                        "confidence": "blocked",
-                        "notes": "FB Marketplace blocked/login-wall/checkpoint",
+                        "confidence": "med" if listings else "low",
+                        "notes": f"query='{query}', median_price_usd={median_price}, listings parseados de aria-label en 1a pagina de resultados",
                     },
-                    pk=("category", "period", "source"),
+                    pk=("category", "period", "source", "naics_label"),
                     alter=True,
                 )
+                inserted += 1
+                print(f"[fb_marketplace] OK {category} ({query}): {len(listings)} listings, median=${median_price}")
                 time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
-                continue
-
-            listings = _parse_listings(html)
-            prices = [x["price"] for x in listings if x["price"] is not None]
-            median_price = sorted(prices)[len(prices) // 2] if prices else None
-
-            table.upsert(
-                {
-                    "category": category,
-                    "period": today,
-                    "source": "fb_marketplace",
-                    "channel_type": channel_type_for("fb_marketplace"),
-                    "fetched_at": fetched_at,
-                    "naics_label": query,
-                    "naics_code": None,
-                    "metric": "active_listing_count",
-                    "value": len(listings),
-                    "geo": "US",
-                    "confidence": "med" if listings else "low",
-                    "notes": f"query='{query}', median_price_usd={median_price}, listings parseados de aria-label en 1a pagina de resultados",
-                },
-                pk=("category", "period", "source"),
-                alter=True,
-            )
-            inserted += 1
-            print(f"[fb_marketplace] OK {category}: {len(listings)} listings, median=${median_price}")
-            time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
 
         browser.close()
 

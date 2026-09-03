@@ -39,12 +39,35 @@ DB_PATH = ROOT / "data" / "masterstock_resale.sqlite"
 # multiplicar 5 categorias x N ciudades en cada ejecucion diaria.
 CITY_SUBDOMAIN = "newyork"
 
+# Ampliado 2026-09-03 por marca real validada en 35_Formula_del_Pallet_Ganador
+# (antes 1 termino/categoria = 5 filas/corrida; ahora ~14). category se
+# repite -- multiples queries por categoria, cada una su propia fila via
+# naics_label en la PK (ver migracion de esquema en el commit).
 QUERIES = {
-    "apparel_footwear": "champion hoodie",
-    "sporting_hobby": "lego set",
-    "electronics_appliance": "jbl speaker",
-    "furniture_home": "sectional couch",
-    "toys": "hot wheels",
+    "apparel_footwear": [
+        "champion hoodie",
+        "hanes t shirt",
+        "wrangler jeans",
+        "adidas hoodie",
+        "nike shorts",
+    ],
+    "sporting_hobby": [
+        "lego set",
+        "hot wheels case",
+        "barbie doll",
+        "squishmallow",
+    ],
+    "electronics_appliance": [
+        "jbl speaker",
+        "bose speaker",
+    ],
+    "furniture_home": [
+        "sectional couch",
+    ],
+    "toys": [
+        "hasbro board game",
+        "mattel toy",
+    ],
 }
 
 USER_AGENTS = [
@@ -75,48 +98,49 @@ def run() -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
 
-        for category, query in QUERIES.items():
-            context = browser.new_context(user_agent=random.choice(USER_AGENTS))
-            page = context.new_page()
+        for category, queries in QUERIES.items():
+            for query in queries:
+                context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+                page = context.new_page()
 
-            qs = urlencode({"query": query, "sort": "date"})
-            url = f"https://{CITY_SUBDOMAIN}.craigslist.org/search/sss?{qs}"
+                qs = urlencode({"query": query, "sort": "date"})
+                url = f"https://{CITY_SUBDOMAIN}.craigslist.org/search/sss?{qs}"
 
-            try:
-                page.goto(url, timeout=20000, wait_until="domcontentloaded")
-                page.wait_for_timeout(4000)  # el listado se puebla via JS despues del load
-                html = page.content()
-            except Exception as exc:  # noqa: BLE001
-                print(f"[craigslist] ERROR {category} ({query}): {exc}")
-                html = ""
-            finally:
-                context.close()
+                try:
+                    page.goto(url, timeout=20000, wait_until="domcontentloaded")
+                    page.wait_for_timeout(4000)  # el listado se puebla via JS despues del load
+                    html = page.content()
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[craigslist] ERROR {category} ({query}): {exc}")
+                    html = ""
+                finally:
+                    context.close()
 
-            titles = RESULT_TITLE_RE.findall(html)
-            prices = [int(p.replace(",", "")) for p in PRICE_RE.findall(html)]
-            median_price = sorted(prices)[len(prices) // 2] if prices else None
+                titles = RESULT_TITLE_RE.findall(html)
+                prices = [int(p.replace(",", "")) for p in PRICE_RE.findall(html)]
+                median_price = sorted(prices)[len(prices) // 2] if prices else None
 
-            table.upsert(
-                {
-                    "category": category,
-                    "period": today,
-                    "source": "craigslist",
-                    "channel_type": channel_type_for("craigslist"),
-                    "fetched_at": fetched_at,
-                    "naics_label": f"{query} ({CITY_SUBDOMAIN})",
-                    "naics_code": None,
-                    "metric": "active_listing_count",
-                    "value": len(titles),
-                    "geo": CITY_SUBDOMAIN,
-                    "confidence": "med" if titles else "low",
-                    "notes": f"query='{query}', city={CITY_SUBDOMAIN}, median_price_usd={median_price}",
-                },
-                pk=("category", "period", "source"),
-                alter=True,
-            )
-            inserted += 1
-            print(f"[craigslist] OK {category}: {len(titles)} listings, median=${median_price}")
-            time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+                table.upsert(
+                    {
+                        "category": category,
+                        "period": today,
+                        "source": "craigslist",
+                        "channel_type": channel_type_for("craigslist"),
+                        "fetched_at": fetched_at,
+                        "naics_label": f"{query} ({CITY_SUBDOMAIN})",
+                        "naics_code": None,
+                        "metric": "active_listing_count",
+                        "value": len(titles),
+                        "geo": CITY_SUBDOMAIN,
+                        "confidence": "med" if titles else "low",
+                        "notes": f"query='{query}', city={CITY_SUBDOMAIN}, median_price_usd={median_price}",
+                    },
+                    pk=("category", "period", "source", "naics_label"),
+                    alter=True,
+                )
+                inserted += 1
+                print(f"[craigslist] OK {category} ({query}): {len(titles)} listings, median=${median_price}")
+                time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
 
         browser.close()
 

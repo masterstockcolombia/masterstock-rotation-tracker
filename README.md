@@ -14,6 +14,23 @@ este repo. Cada workflow de GitHub Actions corre en cron, agrega filas nuevas,
 y hace `git commit` solo si el archivo cambio. **El historial de git es la
 base de datos versionada** -- gratis, propia, con timestamp de cada snapshot.
 
+## Multiples queries por categoria (ampliado 2026-09-03)
+
+Cada categoria puede tener varias marcas/terminos de busqueda (ej.
+`apparel_footwear` corre Champion, Hanes, Wrangler, Adidas, Nike por
+separado), validadas contra `35_Formula_del_Pallet_Ganador` del vault.
+Esto requirio **ampliar la clave primaria** de la tabla de
+`(category, period, source)` a `(category, period, source, naics_label)`
+-- sin esto, dos marcas de la misma categoria en el mismo dia se pisaban
+entre si via upsert (el campo `naics_label` guarda el termino/marca de
+cada fila). Migracion aplicada sobre los datos existentes sin perder
+ninguna fila (verificado: 0 colisiones bajo la PK nueva antes de migrar).
+
+Si clonas este repo desde antes de esa fecha, tu `data/masterstock_resale.sqlite`
+local tiene la PK vieja -- correr los scrapers actualizados sobre esa copia
+puede fallar o comportarse distinto. Traé la version mas reciente
+(`git pull`) en vez de mezclar.
+
 ## Trazabilidad: `channel_type`
 
 Con 8 fuentes en la misma tabla `comps_rotation`, la columna `source` (nombre
