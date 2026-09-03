@@ -37,13 +37,23 @@ DB_PATH = ROOT / "data" / "masterstock_resale.sqlite"
 API_BASE = "https://api.census.gov/data/timeseries/eits/marts"
 
 # Categorias NAICS relevantes a liquidacion/overstock domestico (alineadas a
-# las categorias GREEN de 35_Formula_del_Pallet_Ganador en el vault).
-# Codigo NAICS -> nombre legible, mapeado a categoria interna de MasterStock.
+# las categorias GREEN/CONDICIONAL de 35_Formula_del_Pallet_Ganador en el
+# vault). Codigo NAICS -> nombre legible, mapeado a categoria interna de
+# MasterStock. Verificados uno por uno contra la API real (2026-09-03) --
+# MARTS solo tiene granularidad de 3 digitos NAICS, no 4+ (ej. "shoe stores"
+# 4482 no existe como serie propia, va dentro de 448).
 CATEGORIES = {
     "448": ("apparel_footwear", "Clothing and clothing accessories stores"),
     "452": ("general_merch", "General merchandise stores"),
     "44X72": ("retail_total", "Retail and food services sales, total"),
-    "4471": ("beauty_health", "Health and personal care stores"),
+    "442": ("furniture_home", "Furniture and home furnishings stores"),
+    "443": ("electronics_appliance", "Electronics and appliance stores"),
+    "444": ("building_garden", "Building material and garden equipment"),
+    "445": ("food_beverage", "Food and beverage stores"),
+    "446": ("beauty_health", "Health and personal care stores"),
+    "451": ("sporting_hobby", "Sporting goods, hobby, musical instrument, book stores"),
+    "453": ("misc_retail", "Miscellaneous store retailers"),
+    "722": ("food_services", "Food services and drinking places"),
 }
 
 DATA_TYPE = "SM"  # Sales - Monthly

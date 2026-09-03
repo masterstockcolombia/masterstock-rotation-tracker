@@ -33,12 +33,21 @@ DB_PATH = ROOT / "data" / "masterstock_resale.sqlite"
 API_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 
 # Series CPI relevantes a categorias de liquidacion/overstock domestico.
-# Codigo de serie BLS -> categoria interna de MasterStock.
+# Codigo de serie BLS -> categoria interna de MasterStock. Verificadas
+# una por una contra la API real (2026-09-03) -- BLS tiene series muy
+# especificas, no todo codigo "logico" existe (ej. furniture/bedding con
+# el codigo SEHP no devolvio datos, se descarta).
 SERIES = {
-    "CUUR0000SEAE": "apparel_footwear",       # Apparel, US city average, NSA
-    "CUUR0000SAF11": "food_at_home",           # Food at home (referencia macro)
-    "CUUR0000SEHF01": "appliances",            # Major appliances
-    "CUUR0000SERA": "electronics",             # Information technology / electronics
+    "CUUR0000SEAE": "apparel_footwear",     # Apparel, US city average, NSA
+    "CUUR0000SEGA": "footwear",             # Footwear
+    "CUUR0000SAF11": "food_at_home",        # Food at home (referencia macro)
+    "CUUR0000SEHF01": "appliances",         # Major appliances
+    "CUUR0000SERA": "electronics",          # Information technology / electronics
+    "CUUR0000SS62031": "sporting_hobby",    # Sporting goods
+    "CUUR0000SEEE": "toys",                 # Toys
+    "CUUR0000SEHK": "housekeeping_supplies",  # Housekeeping supplies
+    "CUUR0000SETA02": "motor_vehicles",     # New and used motor vehicles (referencia macro)
+    "CUUR0000SAH1": "shelter",              # Shelter (referencia macro de contexto economico)
 }
 
 
