@@ -1,0 +1,193 @@
+"""
+Facebook Marketplace -- listings activos por categoria (proxy de oferta y
+demanda local), via scraping de la pagina de busqueda publica (sin login).
+
+HONESTIDAD (ver README): a diferencia de eBay (bloqueado con CAPTCHA en la
+mayoria de intentos), Facebook Marketplace SI respondio en el primer test
+(2026-09-03): 76 precios extraidos de una sola pagina, sin login, sin
+CAPTCHA. La pagina de resultados incluye cada listing como un atributo
+aria-label con formato estable: "<titulo>, US$<precio>, <ciudad>,
+publicacion <id>" -- mas robusto que depender de clases CSS (que cambian
+seguido) porque aria-label es accesibilidad, no styling.
+
+Esto NO mide "sold" (Facebook Marketplace no expone historial de vendidos
+publicamente) -- mide LISTINGS ACTIVOS por categoria como proxy de oferta
++ densidad de mercado local. Complementa, no reemplaza, la senal de sold
+real de eBay cuando esa funcione.
+
+Uso:
+    python -m scrapers.fb_marketplace
+"""
+from __future__ import annotations
+
+import random
+import re
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlencode
+
+import sqlite_utils
+from playwright.sync_api import sync_playwright
+
+ROOT = Path(__file__).resolve().parents[1]
+DB_PATH = ROOT / "data" / "masterstock_resale.sqlite"
+
+SEARCH_URL = "https://www.facebook.com/marketplace/search/"
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+]
+
+# Categorias GREEN/CONDICIONAL de 35_Formula_del_Pallet_Ganador -- termino
+# de busqueda representativo por categoria.
+QUERIES = {
+    "apparel_footwear": "champion hoodie",
+    "sporting_hobby": "lego set",
+    "electronics_appliance": "jbl speaker",
+    "furniture_home": "sectional couch",
+    "toys": "hot wheels",
+}
+
+# El HTML de Facebook varia entre corridas (A/B de su frontend, confirmado
+# 2026-09-03): a veces sirve aria-label plano, a veces JSON embebido con
+# mas estructura y mejor precision de precio. Se prueban ambos, JSON primero
+# porque da amount numerico limpio (aria-label a veces trunca miles con
+# formato "1.499" ambiguo entre punto decimal y separador de miles).
+JSON_LISTING_RE = re.compile(
+    r'"listing_price":\{"formatted_amount":"US\$[\d.,]+","amount_with_offset_in_currency":"\d+","amount":"([\d.]+)"\}'
+    r'.{0,400}?"city":"([^"]*)".{0,600}?"marketplace_listing_title":"([^"]*)"'
+)
+ARIA_LISTING_RE = re.compile(r'aria-label="([^"$]+), US\$([\d.,]+), ([^,]+), publicaci[oó]n (\d+)"')
+
+MIN_DELAY_SECONDS = 5
+MAX_DELAY_SECONDS = 10
+
+
+def _looks_blocked(html: str) -> bool:
+    # OJO: "checkpoint" y "captcha" aparecen como SUBSTRINGS en JS interno de
+    # Facebook incluso cuando la pagina no esta bloqueada (ej. rutas internas
+    # "/checkpoint/block/", o el flag "is_checkpointed":false) -- probado con
+    # falso positivo real en test 2026-09-03. Usar frases completas de UI de
+    # bloqueo, y el flag JSON explicito "is_checkpointed":true si aparece.
+    lowered = html.lower()
+    if '"is_checkpointed":true' in lowered:
+        return True
+    markers = (
+        "log into facebook to continue",
+        "you must log in to continue",
+        "confirm your identity",
+        "you'll need to verify",
+    )
+    return any(m in lowered for m in markers)
+
+
+def _parse_listings(html: str) -> list[dict]:
+    # Metodo 1: JSON embebido, amount ya viene numerico limpio ("15.00").
+    json_matches = JSON_LISTING_RE.findall(html)
+    if json_matches:
+        return [
+            {"title": title.strip(), "price": float(price), "city": city.strip(), "listing_id": None}
+            for price, city, title in json_matches
+        ]
+
+    # Metodo 2 (fallback): aria-label plano, precio con formato ambiguo
+    # ("1,499" o "1.499" segun localizacion) -- se asume "," o "." como
+    # separador de miles si hay 3 digitos despues, nunca decimal (Marketplace
+    # no lista centavos en el resumen de busqueda).
+    out = []
+    for title, price_raw, city, listing_id in ARIA_LISTING_RE.findall(html):
+        try:
+            price_val = float(price_raw.replace(",", "").replace(".", ""))
+        except ValueError:
+            price_val = None
+        out.append({"title": title.strip(), "price": price_val, "city": city.strip(), "listing_id": listing_id})
+    return out
+
+
+def run() -> int:
+    db = sqlite_utils.Database(DB_PATH)
+    table = db["comps_rotation"]
+
+    inserted = 0
+    blocked = 0
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+
+        for category, query in QUERIES.items():
+            context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+            page = context.new_page()
+
+            qs = urlencode({"query": query, "sortBy": "creation_time_descend"})
+            url = f"{SEARCH_URL}?{qs}"
+
+            try:
+                page.goto(url, timeout=20000, wait_until="domcontentloaded")
+                page.wait_for_timeout(2000)
+                html = page.content()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[fb_marketplace] ERROR {category} ({query}): {exc}")
+                html = ""
+            finally:
+                context.close()
+
+            if not html or _looks_blocked(html):
+                blocked += 1
+                print(f"[fb_marketplace] BLOCKED {category} ({query})")
+                table.upsert(
+                    {
+                        "category": category,
+                        "period": today,
+                        "source": "fb_marketplace",
+                        "fetched_at": fetched_at,
+                        "naics_label": query,
+                        "naics_code": None,
+                        "metric": "active_listing_count",
+                        "value": None,
+                        "geo": "US",
+                        "confidence": "blocked",
+                        "notes": "FB Marketplace blocked/login-wall/checkpoint",
+                    },
+                    pk=("category", "period", "source"),
+                    alter=True,
+                )
+                time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+                continue
+
+            listings = _parse_listings(html)
+            prices = [x["price"] for x in listings if x["price"] is not None]
+            median_price = sorted(prices)[len(prices) // 2] if prices else None
+
+            table.upsert(
+                {
+                    "category": category,
+                    "period": today,
+                    "source": "fb_marketplace",
+                    "fetched_at": fetched_at,
+                    "naics_label": query,
+                    "naics_code": None,
+                    "metric": "active_listing_count",
+                    "value": len(listings),
+                    "geo": "US",
+                    "confidence": "med" if listings else "low",
+                    "notes": f"query='{query}', median_price_usd={median_price}, listings parseados de aria-label en 1a pagina de resultados",
+                },
+                pk=("category", "period", "source"),
+                alter=True,
+            )
+            inserted += 1
+            print(f"[fb_marketplace] OK {category}: {len(listings)} listings, median=${median_price}")
+            time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+
+        browser.close()
+
+    print(f"[fb_marketplace] inserted {inserted} rows, {blocked} blocked, into {DB_PATH}")
+    return inserted
+
+
+if __name__ == "__main__":
+    run()
