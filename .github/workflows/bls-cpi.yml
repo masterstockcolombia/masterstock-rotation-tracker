@@ -28,11 +28,5 @@ jobs:
           BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
         run: python -m scrapers.bls_cpi
 
-      - name: Commit data if changed
-        run: |
-          git config user.name "masterstock-rotation-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/masterstock_resale.sqlite
-          git diff --staged --quiet || git commit -m "data: bls cpi snapshot $(date -u +%Y-%m-%d)"
-          git pull --rebase origin main
-          git push
+      - name: Commit data if changed (robusto a conflicto binario)
+        run: bash scripts/commit_and_push.sh scrapers.bls_cpi "data: bls cpi snapshot $(date -u +%Y-%m-%d)"
