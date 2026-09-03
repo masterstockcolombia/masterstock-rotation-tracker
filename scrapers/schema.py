@@ -74,3 +74,21 @@ def canonical_category(category: str) -> str:
     housekeeping_supplies, motor_vehicles, shelter) devuelven el mismo
     valor sin cambios."""
     return CANONICAL_CATEGORY.get(category, category)
+
+
+# ---------------------------------------------------------------------------
+# Granularidad temporal por channel_type -- otro hueco real encontrado
+# 2026-09-03: `period` NO tiene el mismo formato/granularidad en toda la
+# tabla. macro_gov (Census, BLS) publica MENSUAL ("2023-01"); todo lo demas
+# (resale_marketplace, search_interest) se captura DIARIO ("2026-09-03").
+# No es un bug de datos -- cada fuente refleja su frecuencia de publicacion
+# real -- pero comparar/ordenar `period` como string plano sin saberlo
+# puede confundir granularidades distintas en un analisis. No hay fix de
+# codigo para esto (normalizar todo a mensual perderia la resolucion diaria
+# real de las fuentes que si la tienen); es una nota de uso.
+PERIOD_GRANULARITY = {
+    "macro_gov": "monthly",  # period formato YYYY-MM
+    "resale_marketplace": "daily",  # period formato YYYY-MM-DD
+    "search_interest": "daily",  # period formato YYYY-MM-DD
+    "import_data": "monthly",  # cuando se implemente Fase 3, confirmar contra el proveedor real
+}

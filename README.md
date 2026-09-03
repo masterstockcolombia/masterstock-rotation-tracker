@@ -56,6 +56,21 @@ from scrapers.schema import canonical_category
 canonical_category(row_bls['category']) == canonical_category(row_fb['category'])
 ```
 
+## Periodos: granularidad distinta por channel_type, no un bug
+
+`period` no tiene el mismo formato en toda la tabla, y es intencional --
+refleja la frecuencia real de publicacion de cada fuente:
+
+| channel_type | Formato de `period` | Granularidad |
+|---|---|---|
+| `macro_gov` (Census, BLS) | `YYYY-MM` | Mensual |
+| `resale_marketplace`, `search_interest` | `YYYY-MM-DD` | Diaria |
+
+No normalizar todo a mensual -- perderia la resolucion diaria real de las
+fuentes que si la tienen. `PERIOD_GRANULARITY` en `scrapers/schema.py`
+documenta esto para consulta rapida al escribir queries que agrupen o
+comparen fechas entre fuentes de distinto channel_type.
+
 ## Honestidad sobre que fuentes son "gratis y listo" vs "gratis + mantenimiento"
 
 | Fuente | channel_type | Costo en dinero | Costo en tiempo humano | Riesgo de romperse |
