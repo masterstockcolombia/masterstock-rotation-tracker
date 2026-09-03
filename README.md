@@ -94,9 +94,21 @@ Ya configurados en este repo (Settings > Secrets and variables > Actions):
 | `fb-marketplace.yml` | Diario 15:00 UTC | Listings activos de Facebook Marketplace (5 categorias); mas confiable que eBay (ver abajo) |
 | `publish-pages.yml` | Al detectar cambio en `data/masterstock_resale.sqlite` | Copia el sqlite a `docs/` para servirlo via GitHub Pages |
 
-Los dos scrapers corren desfasados 30 min para minimizar choque de push sobre
-el mismo archivo binario; cada uno hace `git pull --rebase` antes de pushear
-por si igual coinciden.
+**Regla operativa: `docs/masterstock_resale.sqlite` es SOLO responsabilidad de
+`publish-pages.yml`.** Ningun scraper ni humano deberia copiar/editar ese
+archivo a mano -- confirmado en produccion que hacerlo rompe
+`scripts/commit_and_push.sh` (deja el working tree sucio con un archivo que
+el script no sabe manejar, y el reintento de rebase falla). Si necesitas
+verificar que `docs/` esta al dia, mira que `publish-pages.yml` haya corrido
+despues del ultimo cambio en `data/`, no lo copies vos mismo.
+
+Todos los workflows de scraping usan `scripts/commit_and_push.sh`, que
+resuelve el conflicto de merge binario automaticamente: si el rebase falla
+porque OTRO workflow ya escribio al sqlite en la misma ventana (paso en
+produccion 2026-09-03 con ebay-sold + fb-marketplace corriendo casi
+simultaneos, uno de los dos perdio la carrera de push), el script aborta el
+rebase, trae la version mas reciente, y RE-CORRE el scraper encima -- seguro
+porque todo es `upsert` con clave natural, nunca duplica. Hasta 3 intentos.
 
 ## Consultar la data
 
