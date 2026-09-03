@@ -56,12 +56,15 @@ def _fetch_category(client: httpx.Client, naics_code: str, api_key: str | None) 
         "time": "from 2023",
         "category_code": naics_code,
         "data_type_code": DATA_TYPE,
+        "seasonally_adj": "yes",
     }
     if api_key:
         params["key"] = api_key
 
     resp = client.get(API_BASE, params=params, timeout=30.0)
     resp.raise_for_status()
+    if resp.status_code == 204 or not resp.text.strip():
+        return []
     rows = resp.json()
     if not rows or len(rows) < 2:
         return []
@@ -87,21 +90,24 @@ def run() -> int:
                 continue
 
             for row in rows:
-                table.insert(
+                # Clave natural (category+period+source) via upsert: correr el
+                # scraper N veces nunca duplica filas, solo actualiza el valor
+                # y fetched_at si Census revisa un mes ya publicado.
+                table.upsert(
                     {
-                        "fetched_at": fetched_at,
                         "category": category,
+                        "period": row.get("time"),
+                        "source": "census_marts",
+                        "fetched_at": fetched_at,
                         "naics_label": label,
                         "naics_code": naics_code,
                         "metric": "retail_sales_monthly",
                         "value": row.get("cell_value"),
-                        "period": row.get("time"),
                         "geo": "US",
-                        "source": "census_marts",
                         "confidence": "high",
                         "notes": "seasonally-adjusted monthly retail sales, macro proxy",
                     },
-                    pk="id",
+                    pk=("category", "period", "source"),
                     alter=True,
                 )
                 inserted += 1
