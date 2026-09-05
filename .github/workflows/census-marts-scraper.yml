@@ -31,4 +31,3 @@ jobs:
 
       - name: Commit data if changed (robusto a conflicto binario)
         run: bash scripts/commit_and_push.sh scrapers.census_marts "data: census marts snapshot $(date -u +%Y-%m-%d)"
-# ping 1788572795
