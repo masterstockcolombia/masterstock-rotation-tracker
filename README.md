@@ -214,15 +214,53 @@ Ya configurados en este repo (Settings > Secrets and variables > Actions):
 
 ## Cron activo
 
+**IMPORTANTE (2026-09-05): los 6 workflows de scraping se renombraron a `*-cron.yml`.** Ver "Bug real: `:` en el mensaje de commit rompe GitHub Actions" mas abajo antes de tocar cualquiera de estos archivos.
+
 | Workflow | Cuando | Que hace |
 |---|---|---|
-| `census-marts.yml` | Lunes 09:00 UTC | Scrapea Census (11 categorias), upsert al sqlite, commit+push si cambio |
-| `bls-cpi.yml` | Lunes 09:30 UTC | Scrapea BLS (10 series), upsert al sqlite, commit+push si cambio |
-| `ebay-sold.yml` | Diario 14:00 UTC | Intenta sell-through de eBay (4 categorias); guarda `confidence=blocked` cuando falla en vez de nada |
-| `fb-marketplace.yml` | Diario 15:00 UTC | Listings activos de Facebook Marketplace (5 categorias); mas confiable que eBay (ver abajo) |
-| `google-trends.yml` | Diario 16:00 UTC | Interes de busqueda por categoria (5 categorias), sin friccion |
-| `craigslist.yml` | Diario 17:00 UTC | Listings activos en NYC (5 categorias), sin friccion detectada |
+| `census-marts-cron.yml` | Lunes 09:00 UTC | Scrapea Census (11 categorias), upsert al sqlite, commit+push si cambio |
+| `bls-cpi-cron.yml` | Lunes 09:30 UTC | Scrapea BLS (10 series), upsert al sqlite, commit+push si cambio |
+| `ebay-sold-cron.yml` | Diario 14:00 UTC | Intenta sell-through de eBay (4 categorias); guarda `confidence=blocked` cuando falla en vez de nada |
+| `fb-marketplace-cron.yml` | Diario 15:00 UTC | Listings activos de Facebook Marketplace (5 categorias). **Cuelgue silencioso observado 2026-09-05** (el proceso arranca pero no produce ningun output ni error en 5+ min) -- no diagnosticado a fondo todavia, puede ser el mismo bloqueo variable de anti-bot documentado abajo o algo especifico del runner. El cron diario reintenta solo. |
+| `google-trends-cron.yml` | Diario 16:00 UTC | Interes de busqueda por categoria (5 categorias), sin friccion |
+| `craigslist-cron.yml` | Diario 17:00 UTC | Listings activos en 48 ciudades. Con tantas ciudades puede tardar 30-40 min en un runner de GitHub Actions -- normal, no cancelar antes de ese margen. |
 | `publish-pages.yml` | Al detectar cambio en `data/masterstock_resale.sqlite` | Copia el sqlite a `docs/` para servirlo via GitHub Pages |
+
+### Bug real: `:` en el mensaje de commit rompe GitHub Actions (encontrado y arreglado 2026-09-05)
+
+Los 6 workflows originales (`census-marts.yml`, `bls-cpi.yml`, `craigslist.yml`,
+`ebay-sold.yml`, `fb-marketplace.yml`, `google-trends.yml`) dejaron de aceptar
+`workflow_dispatch` y `schedule` en algun momento entre el 2026-09-03 y el
+2026-09-04 -- la API de GitHub Actions rechazaba el dispatch manual con
+`HTTP 422: Workflow does not have 'workflow_dispatch' trigger`, pese a que el
+YAML remoto SI declaraba `workflow_dispatch: {}` correctamente, y el cron
+`schedule` nunca disparo ni una sola vez en la vida del repo.
+
+Diagnostico exhaustivo (14 workflows de prueba, uno por variable a la vez)
+encontro la causa raiz real: **el caracter `:` dentro del string del mensaje
+de commit pasado a `scripts/commit_and_push.sh`** (ej. `"data: census marts
+snapshot"`) corrompe el registro interno de GitHub Actions para ESE workflow
+especifico -- la API pasa a reportar su `name` como el path del archivo en vez
+del `name:` real declarado en el YAML, señal de que GitHub nunca logra
+parsear correctamente su contenido a nivel de indexacion (aunque el YAML sea
+perfectamente valido y el job en si ejecute bien si se lo dispara por otro
+medio). El bug es **permanente para ese path**: ni editar el archivo, ni
+borrarlo y recrearlo con el MISMO nombre lo arregla -- GitHub reutiliza el
+mismo objeto/ID de workflow interno por path.
+
+**Fix aplicado:** los 6 archivos se recrearon con nombres nunca antes usados
+en el repo (`*-cron.yml`) Y los mensajes de commit se cambiaron de `"data:
+census marts snapshot"` a `"data - census marts snapshot"` (guion en vez de
+dos puntos). Confirmado en produccion: workflow_dispatch funciona de
+inmediato en los archivos nuevos.
+
+**Regla para el futuro:** nunca usar `:` dentro de un string de mensaje de
+commit en ningun `run:` de un workflow de este repo. Usar ` - ` como
+separador. Si un workflow nuevo alguna vez vuelve a rechazar
+`workflow_dispatch`, revisar primero si algun `run:` tiene `:` dentro de un
+string antes de asumir que es un problema de permisos o billing (ambos
+fueron revisados y descartados en esta ronda -- cuenta sin restricciones,
+billing limpio, `Settings > Actions` en "allow all").
 
 **Regla operativa: `docs/masterstock_resale.sqlite` es SOLO responsabilidad de
 `publish-pages.yml`.** Ningun scraper ni humano deberia copiar/editar ese
