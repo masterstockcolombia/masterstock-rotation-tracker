@@ -1,0 +1,33 @@
+name: fb-marketplace
+
+on:
+  schedule:
+    # Diario 15:00 UTC (1h despues de ebay-sold, para no saturar el mismo
+    # runner ni chocar push en la misma ventana).
+    - cron: "0 15 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run Facebook Marketplace scraper
+        run: python -m scrapers.fb_marketplace
+        continue-on-error: true  # un bloqueo es data (confidence=blocked), no un fallo del workflow
+
+      - name: Commit data if changed (robusto a conflicto binario)
+        run: bash scripts/commit_and_push.sh scrapers.fb_marketplace "data - fb marketplace snapshot $(date -u +%Y-%m-%d)"
