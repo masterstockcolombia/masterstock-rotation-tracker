@@ -7,8 +7,6 @@ on:
     # los 60 dias de inactividad).
     - cron: "0 9 * * 1"
   workflow_dispatch: {}
-  repository_dispatch:
-    types: [run-census-marts]
 
 permissions:
   contents: write
