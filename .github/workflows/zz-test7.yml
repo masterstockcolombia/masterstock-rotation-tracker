@@ -1,4 +1,4 @@
-name: zz-test6
+name: zz-test7
 
 on:
   schedule:
@@ -18,4 +18,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - run: echo hi
+      - name: Run Census MARTS scraper
+        env:
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+        run: python -m scrapers.census_marts
