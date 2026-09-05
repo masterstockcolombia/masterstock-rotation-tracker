@@ -1,6 +1,10 @@
 name: bls-cpi
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/HEARTBEAT.md"
   schedule:
     # Cada lunes 09:30 UTC (30 min despues de census-marts, para minimizar
     # choque de push sobre el mismo archivo sqlite).

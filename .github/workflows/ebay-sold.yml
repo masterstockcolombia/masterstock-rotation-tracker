@@ -1,6 +1,10 @@
 name: ebay-sold
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/HEARTBEAT.md"
   schedule:
     # Diario 14:00 UTC. A diferencia de Census/BLS (mensual), sell-through
     # de eBay SI cambia dia a dia -- por eso corre diario, aunque hoy la

@@ -1,6 +1,14 @@
 name: census-marts
 
 on:
+  push:
+    branches: [main]
+    paths:
+      # push es el UNICO evento confirmado que dispara jobs reales en este
+      # repo -- schedule/workflow_dispatch/repository_dispatch los rechaza
+      # GitHub de forma intermitente (ver .github/HEARTBEAT.md). Un cron
+      # externo toca ese archivo una vez al dia para generar este push.
+      - ".github/HEARTBEAT.md"
   schedule:
     # Cada lunes 09:00 UTC. Census MARTS se actualiza mensualmente, semanal
     # alcanza de sobra y mantiene el workflow "vivo" (evita auto-disable a
