@@ -1,10 +1,6 @@
 name: fb-marketplace
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/HEARTBEAT.md"
   schedule:
     # Diario 15:00 UTC (1h despues de ebay-sold, para no saturar el mismo
     # runner ni chocar push en la misma ventana).

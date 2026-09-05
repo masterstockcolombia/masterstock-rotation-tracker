@@ -1,10 +1,6 @@
 name: google-trends
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/HEARTBEAT.md"
   schedule:
     # Diario 16:00 UTC. Sin login, sin anti-bot fuerte confirmado en test
     # real (2026-09-03, 5/5 categorias OK con request_delay=3.0) -- la
