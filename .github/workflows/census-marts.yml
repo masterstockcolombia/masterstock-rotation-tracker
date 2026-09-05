@@ -1,0 +1,33 @@
+name: census-marts
+
+on:
+  schedule:
+    # Cada lunes 09:00 UTC. Census MARTS se actualiza mensualmente, semanal
+    # alcanza de sobra y mantiene el workflow "vivo" (evita auto-disable a
+    # los 60 dias de inactividad).
+    - cron: "0 9 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Census MARTS scraper
+        env:
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+        run: python -m scrapers.census_marts
+
+      - name: Commit data if changed (robusto a conflicto binario)
+        run: bash scripts/commit_and_push.sh scrapers.census_marts "data: census marts snapshot $(date -u +%Y-%m-%d)"

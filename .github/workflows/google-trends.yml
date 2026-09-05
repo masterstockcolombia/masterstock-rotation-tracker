@@ -1,0 +1,32 @@
+name: google-trends
+
+on:
+  schedule:
+    # Diario 16:00 UTC. Sin login, sin anti-bot fuerte confirmado en test
+    # real (2026-09-03, 5/5 categorias OK con request_delay=3.0) -- la
+    # fuente mas limpia de las nuevas de esta ronda.
+    - cron: "0 16 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Google Trends scraper
+        run: python -m scrapers.google_trends
+        continue-on-error: true
+
+      - name: Commit data if changed (robusto a conflicto binario)
+        run: bash scripts/commit_and_push.sh scrapers.google_trends "data: google trends snapshot $(date -u +%Y-%m-%d)"
