@@ -1,9 +1,12 @@
-name: zz-test4
+name: zz-test5
 
 on:
   schedule:
     - cron: "0 9 * * 1"
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   ping:
