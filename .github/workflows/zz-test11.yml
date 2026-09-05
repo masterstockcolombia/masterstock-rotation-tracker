@@ -1,4 +1,4 @@
-name: zz-test10
+name: zz-test11
 
 on:
   schedule:
@@ -23,4 +23,4 @@ jobs:
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
         run: python -m scrapers.census_marts
       - name: Commit data if changed
-        run: echo "placeholder"
+        run: bash scripts/commit_and_push.sh scrapers.census_marts "test message"
